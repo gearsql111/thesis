@@ -10,6 +10,7 @@ from google.cloud import storage
 
 
 import os
+import logging
 
 
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/opt/airflow/credentials/is-my-project-428015-8661db9b13f2.json"
@@ -83,6 +84,7 @@ with DAG(
                         },
                         "sourceFormat": "CSV",
                         "writeDisposition": "WRITE_APPEND",
+                        "autodetect": False,
                         "schema": [
                             {"name": "station_id", "type": "STRING", "mode": "REQUIRED"},        # Primary key
                             {"name": "name_th", "type": "STRING", "mode": "NULLABLE"},
@@ -99,6 +101,9 @@ with DAG(
                             {"name": "pm25_value", "type": "FLOAT", "mode": "NULLABLE"},         # PM2.5 Value
                             {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},             # Year
                             {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},            # Month
+                            {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},   
+                            {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},
+                            {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},
                             {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},              # Day
                         ],  # เพิ่ม schema ของตาราง
                         "skipLeadingRows": 1,  # ข้าม header
@@ -109,7 +114,7 @@ with DAG(
             )
             load_tasks_to_bigquery.append(load_task)
             print("Files in output folder:", os.listdir(output_folder))
-
+        
 
     # Task สำหรับลงทะเบียนฟีเจอร์ใน Feast
     register_feature_task = PythonOperator(
