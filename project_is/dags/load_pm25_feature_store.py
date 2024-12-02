@@ -45,11 +45,15 @@ def upload_files_to_gcs():
 
     print("Completed upload_files_to_gcs function")
 
+fs = FeatureStore(repo_path="/opt/airflow/feast")
 # ฟังก์ชันสำหรับลงทะเบียนฟีเจอร์ใน Feast
 def register_feature_in_feast():
-    fs = FeatureStore(repo_path="path/to/your/feature_repo")
-    fs.apply()
+    fs.apply(["pm25_features", "station"])
     print("Feature registered successfully in Feast")
+    
+def ingest_incremental_data():
+    fs.materialize_incremental(end_date=datetime.now())
+    print("Data materialized into offline store.")
 
 # กำหนด DAG และ Tasks
 with DAG(
@@ -84,28 +88,28 @@ with DAG(
                         },
                         "sourceFormat": "CSV",
                         "writeDisposition": "WRITE_APPEND",
-                        "autodetect": False,
-                        "schema": [
-                            {"name": "station_id", "type": "STRING", "mode": "REQUIRED"},        # Primary key
-                            {"name": "name_th", "type": "STRING", "mode": "NULLABLE"},
-                            {"name": "name_en", "type": "STRING", "mode": "NULLABLE"},
-                            {"name": "area_th", "type": "STRING", "mode": "NULLABLE"},
-                            {"name": "area_en", "type": "STRING", "mode": "NULLABLE"},
-                            {"name": "station_type", "type": "STRING", "mode": "NULLABLE"},
-                            {"name": "lat", "type": "FLOAT", "mode": "NULLABLE"},                # Latitude
-                            {"name": "long", "type": "FLOAT", "mode": "NULLABLE"},               # Longitude
-                            {"name": "date", "type": "DATE", "mode": "NULLABLE"},                # Date field
-                            {"name": "time", "type": "TIME", "mode": "NULLABLE"},                # Time field
-                            {"name": "pm25_color_id", "type": "INTEGER", "mode": "NULLABLE"},    # Color ID
-                            {"name": "pm25_aqi", "type": "INTEGER", "mode": "NULLABLE"},         # AQI Value
-                            {"name": "pm25_value", "type": "FLOAT", "mode": "NULLABLE"},         # PM2.5 Value
-                            {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},             # Year
-                            {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},            # Month
-                            {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},   
-                            {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},
-                            {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},
-                            {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},              # Day
-                        ],  # เพิ่ม schema ของตาราง
+                        "autodetect": True,
+                        # "schema": [
+                        #     {"name": "station_id", "type": "STRING", "mode": "NULLABLE"},        # Primary key
+                        #     {"name": "name_th", "type": "STRING", "mode": "NULLABLE"},
+                        #     {"name": "name_en", "type": "STRING", "mode": "NULLABLE"},
+                        #     {"name": "area_th", "type": "STRING", "mode": "NULLABLE"},
+                        #     {"name": "area_en", "type": "STRING", "mode": "NULLABLE"},
+                        #     {"name": "station_type", "type": "STRING", "mode": "NULLABLE"},
+                        #     {"name": "lat", "type": "FLOAT", "mode": "NULLABLE"},                # Latitude
+                        #     {"name": "long", "type": "FLOAT", "mode": "NULLABLE"},               # Longitude
+                        #     {"name": "date", "type": "DATE", "mode": "NULLABLE"},                # Date field
+                        #     {"name": "time", "type": "STRING", "mode": "NULLABLE"},                # Time field
+                        #     {"name": "pm25_color_id", "type": "INTEGER", "mode": "NULLABLE"},    # Color ID
+                        #     {"name": "pm25_aqi", "type": "INTEGER", "mode": "NULLABLE"},         # AQI Value
+                        #     {"name": "pm25_value", "type": "FLOAT", "mode": "NULLABLE"},         # PM2.5 Value
+                        #     {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},             # Year
+                        #     {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},            # Month
+                        #     {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},   
+                        #     {"name": "year", "type": "INTEGER", "mode": "NULLABLE"},
+                        #     {"name": "month", "type": "INTEGER", "mode": "NULLABLE"},
+                        #     {"name": "day", "type": "INTEGER", "mode": "NULLABLE"},              # Day
+                        # ],  # เพิ่ม schema ของตาราง
                         "skipLeadingRows": 1,  # ข้าม header
                     }
                 },
@@ -122,6 +126,12 @@ with DAG(
         python_callable=register_feature_in_feast,
         execution_timeout=timedelta(minutes=30),
     )
+    
+    ingest_incremental_offline_task = PythonOperator(
+    task_id="ingest_incremental_data",
+    python_callable=ingest_incremental_data,
+    dag=dag,
+    )
 
     # กำหนดลำดับการทำงาน
-    upload_task_to_gcs >> load_tasks_to_bigquery >> register_feature_task
+    upload_task_to_gcs >> load_tasks_to_bigquery >> register_feature_task >> ingest_incremental_offline_task

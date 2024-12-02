@@ -12,7 +12,7 @@ import os
 
 default_args = {
     'owner': 'airflow',
-    'retries': 5,
+    'retries': 10,
     'retry_delay': timedelta(minutes=5),
 }
 
@@ -79,11 +79,13 @@ with DAG('Extract_api_pm25_data',
     fetch_data_task = PythonOperator(
         task_id='fetch_data',
         python_callable=fetch_data,
+        execution_timeout=timedelta(minutes=30),
     )
     
     trigger_next_transform_pm25_data = TriggerDagRunOperator(
-        task_id='feature_engineering_task',
-        trigger_dag_id='transform_pm25_data', 
+        task_id='feature_engineering',
+        trigger_dag_id='transform_pm25_data',
+        execution_timeout=timedelta(minutes=10),
     )
 
 start_task >> fetch_data_task >> trigger_next_transform_pm25_data
